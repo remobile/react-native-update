@@ -1,0 +1,34 @@
+{
+    "name": "@remobile/react-native-update",
+    "version": "1.0.0",
+    "description": "A android like update for react-native support for ios and android",
+    "main": "index.js",
+    "author": {
+        "name": "YunJiang.Fang",
+        "email": "42550564@qq.com"
+    },
+    "license": "MIT",
+    "keywords": [
+        "react-native",
+        "react-component",
+        "ios",
+        "android",
+        "update",
+        "position",
+        "remobile",
+        "mobile"
+    ],
+    "homepage": "https://github.com/remobile/react-native-update",
+    "bugs": {
+        "url": "https://github.com/remobile/react-native-update/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/remobile/react-native-update.git"
+    },
+    "peerDependencies": {
+        "@remobile/react-native-cordova": "^1.0.2",
+        "react-native-fs": "^1.0.0",
+        "@remobile/react-native-file-transfer": "^1.0.9"
+    }
+}
