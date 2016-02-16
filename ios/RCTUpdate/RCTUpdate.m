@@ -29,14 +29,15 @@ RCT_EXPORT_MODULE()
         return [NSURL fileURLWithPath:mainBundleFilePath];
     }
     return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+//    return [NSURL URLWithString:@"http://localhost:8081/index.ios.bundle?platform=ios&dev=true"];
 }
 
 + (NSString *)DocumentFilePath {
-    return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+    return [[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0]stringByAppendingString:@"/"];
 }
 
 + (NSString *)MainBundleFilePath {
-    return [[RCTUpdate DocumentFilePath] stringByAppendingString:@"/www/index.ios.bundle"];
+    return [[RCTUpdate DocumentFilePath] stringByAppendingString:@"www/index.ios.bundle"];
 }
 
 - (id)init {
@@ -60,11 +61,14 @@ RCT_EXPORT_MODULE()
 };
 
 
+RCT_EXPORT_METHOD(installFromAppStore:(nonnull NSNumber *)appId) {
+    NSString *str = [NSString stringWithFormat: @"itms-apps://ax.itunes.apple.com/WebObjects/MZStore.woa/wa/viewContentsUserReviews?type=Purple+Software&id=%d", [appId intValue]];
+    [[UIApplication sharedApplication] openURL:[NSURL URLWithString:str]];
+}
+
 RCT_EXPORT_METHOD(restartApp) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (![_bridge.bundleURL.scheme hasPrefix:@"http"]) {
-            _bridge.bundleURL = [RCTUpdate getBundleUrl];
-        }
+        _bridge.bundleURL = [RCTUpdate getBundleUrl];
         [_bridge reload];
     });
 }

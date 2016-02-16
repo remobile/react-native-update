@@ -17,15 +17,17 @@ import com.facebook.react.uimanager.ViewManager;
 public class RCTUpdatePackage implements ReactPackage {
     private Activity activity;
     private RCTUpdate mModuleInstance;
+    private RCTUpdateMgr updateMgr;
 
-    public RCTUpdatePackage(Activity activity) {
+    public RCTUpdatePackage(Activity activity, RCTUpdateMgr updateMgr) {
         super();
         this.activity = activity;
+        this.updateMgr = updateMgr;
     }
 
     @Override
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
-        mModuleInstance = new RCTUpdate(reactContext, activity);
+        mModuleInstance = new RCTUpdate(reactContext, activity, updateMgr);
         return Arrays.<NativeModule>asList(
                 mModuleInstance
         );
@@ -39,9 +41,5 @@ public class RCTUpdatePackage implements ReactPackage {
     @Override
     public List<ViewManager> createViewManagers(ReactApplicationContext reactContext) {
         return Arrays.<ViewManager>asList();
-    }
-
-    public String getBundleUrl() {
-        return mModuleInstance.getBundleUrl();
     }
 }

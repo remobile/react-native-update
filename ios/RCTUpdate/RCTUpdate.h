@@ -9,5 +9,5 @@
 #import "RCTBridgeModule.h"
 
 @interface RCTUpdate : NSObject <RCTBridgeModule>
-
++ (NSURL*)getBundleUrl;
 @end

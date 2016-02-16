@@ -10,6 +10,7 @@ var React = require('react-native');
 var {
     NativeModules,
     Platform,
+    AsyncStorage,
 } = React;
 
 //errors
@@ -20,6 +21,13 @@ ERROR_DOWNKOAD_JS = 2,
 ERROR_GET_VERSION = 3,
 ERROR_UNZIP_JS = 4;
 
+var JS_VERISON_ITEM_NAME = "rct_update_js_version_code";
+var JS_VERISON_CODE = 0;
+
+AsyncStorage.getItem(JS_VERISON_ITEM_NAME).then((version)=>{
+    JS_VERISON_CODE = version||0;
+});
+
 var fs = require('react-native-fs');
 var RCTUpdate= NativeModules.Update;
 var FileTransfer = require('@remobile/react-native-file-transfer');
@@ -27,10 +35,10 @@ var Zip = require('@remobile/react-native-zip');
 
 class Update {
     constructor(options) {
-        var documentFilePath = '/Users/fang/rn/KitchenSink/App/vaccinum/server/image/';//RCTUpdate.documentFilePath;
+        var documentFilePath = RCTUpdate.documentFilePath;
         options.documentFilePath = documentFilePath;
         options.wwwPath = documentFilePath+'www',
-        options.jsbundleZipPath = documentFilePath+'jsbundle.zip',
+        options.jsbundleZipPath = documentFilePath+'www.zip',
         options.localVersionPath = documentFilePath+'version.json',
         this.options = options;
     }
@@ -52,7 +60,7 @@ class Update {
         }
     }
     downloadAppFromAppStore() {
-        console.log("not complete!");
+        RCTUpdate.installFromAppStore(this.options.iosAppId);
     }
     downloadApkFromServer() {
         var fileTransfer = new FileTransfer();
@@ -61,13 +69,15 @@ class Update {
                 this.options.onDownloadAPKProgress(parseInt(progress.loaded*100/progress.total))
             }
         }
+        this.options.onDownloadAPKStart&&this.options.onDownloadAPKStart();
         fileTransfer.download(
             this.options.androidApkUrl,
             this.options.androidApkDownloadDestPath,
-            function(result) {
+            (result)=>{
+                this.options.onDownloadAPKEnd&&this.options.onDownloadAPKEnd();
                 RCTUpdate.installApk(this.options.androidApkDownloadDestPath);
             },
-            function(error) {
+            (error)=>{
                 this.options.onError(ERROR_DOWNKOAD_APK);
             },
             true
@@ -80,29 +90,54 @@ class Update {
                 this.options.onDownloadJSProgress(parseInt(progress.loaded*100/progress.total));
             };
         }
+        this.options.onDownloadJSStart&&this.options.onDownloadJSStart();
         fileTransfer.download(
             this.options.jsbundleUrl,
             this.options.jsbundleZipPath,
             this.unzipJSZipFile.bind(this),
-            function(error) {
+            (error)=>{
                 this.options.onError(ERROR_DOWNKOAD_JS);
             },
             true
         );
     }
+    deleteWWWDir() {
+        return new Promise((resolve, reject) => {
+            fs.unlink(this.options.wwwPath).then(()=>{
+                resolve();
+            }).catch((err)=>{
+                resolve();
+            });
+        });
+    }
+    saveLocalJsVersion(ver) {
+        return new Promise((resolve, reject) => {
+            AsyncStorage.setItem(JS_VERISON_ITEM_NAME, ver+'').then(()=>{
+                JS_VERISON_CODE = ver;
+                resolve();
+            }).catch((err)=>{
+                resolve();
+            });
+        });
+    }
     async unzipJSZipFile(result) {
+        this.options.onDownloadJSEnd&&this.options.onDownloadJSEnd();
         var onprogress;
         if (this.options.onUnzipJSProgress) {
             onprogress = (progress) => {
                 this.options.onUnzipJSProgress(parseInt(progress.loaded*100/progress.total));
             };
         }
-        await fs.unlink(this.options.wwwPath);
-        Zip.unzip(this.options.jsbundleZipPath, this.options.documentFilePath, (res)=>{
+        this.options.onUnzipJSStart&&this.options.onUnzipJSStart();
+        await this.deleteWWWDir();
+        await this.saveLocalJsVersion(this.jsVersionCode);
+        Zip.unzip(this.options.jsbundleZipPath, this.options.documentFilePath,async (res)=>{
             if (res) {
+                await this.saveLocalJsVersion(0); //if unzip error, refresh origin version
                 this.options.onError(ERROR_UNZIP_JS);
             } else {
-                fs.unlink(this.options.jsbundleZipPath);
+                await fs.unlink(this.options.jsbundleZipPath);
+                this.options.onUnzipJSEnd&&this.options.onUnzipJSEnd();
                 RCTUpdate.restartApp();
             }
         }, onprogress);
@@ -112,11 +147,31 @@ class Update {
     }
     async getServerVersionSuccess(remote) {
         if (RCTUpdate.versionCode < remote.versionCode) {
-            this.downloadAppFromServer();
+            if (this.options.needUpdateApp) {
+                 this.options.needUpdateApp(getVersion(), remote, (res)=>{
+                    if (res === 0) {
+                        this.downloadAppFromServer();
+                    } else if (res === 1) {
+                        // 跳过此版本
+                    }
+                })
+            } else {
+                this.downloadAppFromServer();
+            }
         } else {
-            var local = await this.getLocalVersion();
-            if (local.jsVersionCode < remote.jsVersionCode) {
-                this.downloadJSFromServer();
+            this.jsVersionCode = remote.jsVersionCode;
+            if (JS_VERISON_CODE < remote.jsVersionCode) {
+                if (this.options.needUpdateJS) {
+                     this.options.needUpdateJS(getVersion(), remote, (res)=>{
+                        if (res === 0) {
+                            this.downloadJSFromServer();
+                        } else if (res === 1) {
+                            // 跳过此版本
+                        }
+                    })
+                } else {
+                    this.downloadJSFromServer();
+                }
             } else {
                 this.options.onNewestVerion();
             }
@@ -125,21 +180,19 @@ class Update {
     getServerVersionError(error) {
         this.options.onError(ERROR_GET_VERSION);
     }
-    getLocalVersion() {
-        console.log(this.options.localVersionPath);
-        return new Promise((resolve, reject) => {
-
-            fs.readFile(this.options.localVersionPath, 'utf8').then((text)=>{
-                var version = JSON.parse(text);
-                resolve(version);
-            }).catch((err)=>{
-                resolve({jsVersionCode:0});
-            });
-        });
-    }
     start() {
         this.getServerVersion();
     }
 }
+
+function getVersion() {
+    return {
+        versionName: RCTUpdate.versionName,
+        versionCode: RCTUpdate.versionCode,
+        jsVersionCode: JS_VERISON_CODE,
+    }
+}
+
+Update.getVersion = getVersion;
 
 module.exports = Update;
