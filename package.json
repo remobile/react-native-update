@@ -1,6 +1,6 @@
 {
     "name": "@remobile/react-native-update",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Update js version and app version for ios and android",
     "main": "index.js",
     "author": {
@@ -27,8 +27,8 @@
         "url": "git://github.com/remobile/react-native-update.git"
     },
     "peerDependencies": {
-        "@remobile/react-native-zip": "^1.0.2",
-        "react-native-fs": "^1.0.0",
-        "@remobile/react-native-file-transfer": "^1.0.9"
+        "@remobile/react-native-zip": "^1.0.3",
+        "react-native-fs": "^2.0.1",
+        "@remobile/react-native-file-transfer": "^1.0.6"
     }
 }

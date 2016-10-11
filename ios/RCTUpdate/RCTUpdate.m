@@ -24,12 +24,26 @@
 RCT_EXPORT_MODULE()
 
 + (NSURL*)getBundleUrl {
+    NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
+    NSString *lastversionCode = [userDefaults objectForKey:@"APP_VERSION_CODE"];
+    NSString *versionCode = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+    if (![lastversionCode isEqualToString:versionCode]) {
+        [userDefaults setObject:versionCode forKey:@"APP_VERSION_CODE"];
+        [userDefaults setObject:@"yes" forKey:@"JS_VERSION_CLEAR"];
+        [userDefaults synchronize];
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+        [fileManager removeItemAtPath:[[RCTUpdate DocumentFilePath] stringByAppendingString:@"www"] error:nil];
+        NSLog(@"=========use update asserts:");
+        return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+    }
+    
     NSString *mainBundleFilePath = [RCTUpdate MainBundleFilePath];
     if ([[NSFileManager defaultManager] fileExistsAtPath:mainBundleFilePath]) {
+         NSLog(@"=========use update:");
         return [NSURL fileURLWithPath:mainBundleFilePath];
     }
+     NSLog(@"=========use asserts:");
     return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
-//    return [NSURL URLWithString:@"http://localhost:8081/index.ios.bundle?platform=ios&dev=true"];
 }
 
 + (NSString *)DocumentFilePath {
@@ -60,17 +74,31 @@ RCT_EXPORT_MODULE()
              };
 };
 
-
-RCT_EXPORT_METHOD(installFromAppStore:(nonnull NSNumber *)appId) {
-    NSString *str = [NSString stringWithFormat: @"itms-apps://ax.itunes.apple.com/WebObjects/MZStore.woa/wa/viewContentsUserReviews?type=Purple+Software&id=%d", [appId intValue]];
-    [[UIApplication sharedApplication] openURL:[NSURL URLWithString:str]];
+RCT_EXPORT_METHOD(installFromAppStore:(nonnull NSString *)trackViewURL) {
+    UIApplication *application = [UIApplication sharedApplication];
+    [application openURL:[NSURL URLWithString:trackViewURL]];
 }
 
 RCT_EXPORT_METHOD(restartApp) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        _bridge.bundleURL = [RCTUpdate getBundleUrl];
+        [_bridge setValue:[RCTUpdate getBundleUrl] forKey:@"bundleURL"];
         [_bridge reload];
     });
+}
+
+RCT_EXPORT_METHOD(getLocalValue:(nonnull NSString *)tag callback:(RCTResponseSenderBlock)callback) {
+    NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
+    NSString *ret = [userDefaults objectForKey:tag];
+    if (ret == nil) {
+        ret = @"";
+    }
+    callback(@[ret]);
+}
+
+RCT_EXPORT_METHOD(setLocalValue:(nonnull NSString *)tag value:(nonnull NSString *)value) {
+    NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
+    [userDefaults setObject:value forKey:tag];
+    [userDefaults synchronize];
 }
 
 @end

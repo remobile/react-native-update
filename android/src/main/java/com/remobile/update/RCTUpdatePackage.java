@@ -1,8 +1,6 @@
 package com.remobile.update;
 
 import android.app.Activity;
-
-import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -16,7 +14,6 @@ import com.facebook.react.uimanager.ViewManager;
 
 public class RCTUpdatePackage implements ReactPackage {
     private Activity activity;
-    private RCTUpdate mModuleInstance;
     private RCTUpdateMgr updateMgr;
 
     public RCTUpdatePackage(Activity activity, RCTUpdateMgr updateMgr) {
@@ -27,9 +24,8 @@ public class RCTUpdatePackage implements ReactPackage {
 
     @Override
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
-        mModuleInstance = new RCTUpdate(reactContext, activity, updateMgr);
         return Arrays.<NativeModule>asList(
-                mModuleInstance
+                new RCTUpdate(reactContext, activity, updateMgr)
         );
     }
 

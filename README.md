@@ -15,7 +15,7 @@ npm install @remobile/react-native-update --save
 ```gradle
 ...
 include ':react-native-update'
-project(':react-native-update').projectDir = new File(rootProject.projectDir, '../node_modules/@remobile/react-native-update/android')
+project(':react-native-update').projectDir = new File(settingsDir, '../node_modules/@remobile/react-native-update/android')
 ```
 
 * In `android/app/build.gradle`
@@ -31,31 +31,32 @@ dependencies {
 * register module (in MainActivity.java)
 
 ```java
-import com.remobile.update.*;  // <--- import
+......
+import com.remobile.update.RCTUpdateMgr;  // <--- import
 
-public class MainActivity extends Activity implements DefaultHardwareBackBtnHandler {
-  ......
-  @Override
-  protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    mReactRootView = new ReactRootView(this);
+......
+public class MainApplication extends Application implements ReactApplication {
+    private RCTUpdateMgr mUpdateMgr; // <------ add here
 
-    mReactInstanceManager = ReactInstanceManager.builder()
-      .setApplication(getApplication())
-      .setBundleAssetName("index.android.bundle")
-      .setJSMainModuleName("index.android")
-      .addPackage(new MainReactPackage())
-      .addPackage(new RCTUpdatePackage())              // <------ add here
-      .setUseDeveloperSupport(BuildConfig.DEBUG)
-      .setInitialLifecycleState(LifecycleState.RESUMED)
-      .build();
+    private final ReactNativeHost mReactNativeHost = new ReactNativeHost(this) {
+        ......
+        @Override
+        protected String getJSBundleFile() {
+            return mUpdateMgr.getBundleUrl();   // <------ change here
+        }
 
-    mReactRootView.startReactApplication(mReactInstanceManager, "ExampleRN", null);
+        @Override
+        protected List<ReactPackage> getPackages() {
+            mUpdateMgr = new RCTUpdateMgr(MainActivity.activity);
 
-    setContentView(mReactRootView);
-  }
-
-  ......
+            return Arrays.<ReactPackage>asList(
+            ......
+            mUpdateMgr.getReactPackage(),       // <------ add here
+            ......
+            );
+        }
+    };
+    ......
 }
 ```
 
@@ -63,14 +64,14 @@ public class MainActivity extends Activity implements DefaultHardwareBackBtnHand
 
 ### Example
 ```js
-var React = require('react-native');
+var React = require('react');
+var ReactNative = require('react-native');
 var {
     StyleSheet,
     View,
     Text,
-} = React;
+} = ReactNative;
 
-var Toast = require('@remobile/react-native-toast').show;
 var Update = require('@remobile/react-native-update');
 var Button = require('@remobile/react-native-simple-button');
 var Dialogs = require('@remobile/react-native-dialogs');
@@ -93,8 +94,7 @@ ERROR_GET_VERSION = 3,
 ERROR_UNZIP_JS = 4;
 
 var ERRORS = ['无错误','下载apk出错','下载js bundle错误','获取版本信息出错','解压程序出错'];
-var PROGRESS_WIDTH = app.Screen.w*5/6;
-
+var PROGRESS_WIDTH = sr.w*5/6;
 
 var ProgressInfo = React.createClass({
     render() {
@@ -209,7 +209,6 @@ module.exports = React.createClass({
     },
 });
 
-var sr = app.Screen;
 var styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -279,94 +278,92 @@ update.start();
         * will be pass errorCode
         * var ERROR_NULL = 0, ERROR_DOWNKOAD_APK = 1, ERROR_DOWNKOAD_JS = 2, ERROR_GET_VERSION = 3, ERROR_UNZIP_JS = 4;
 
-## Publish Image
+## Generate Bundle
 ```bash
 #!/bin/bash
-resource=$1
-
-function main() {
-    rm -fr www
-    mkdir www
-    checkResource
-    cd ..
-    #genIOSBundle
-    genAndroidBundle
-    zipAll
-}
-
-function checkResource() {
-    if [ -z "${resource}" ];then
-        echo Usage:./genbundle resourcedir
-        exit
-    fi
-    if ! [ -a ${resource}/image ];then
-        echo please set right resource dir
-        exit
-    fi
-    if ! [ -f ${resource}/image.js ];then
-        echo please set right resource dir
-        exit
-    fi
-    resource=`cd ${resource};pwd`
-}
-
-function clearChache() {
-    pushd /var/folders 1>/dev/null
-    sudo find -name react-packager* -exec rm -fr {} \;
-    popd 1>/dev/null
-}
 
 function genIOSBundle() {
     mkdir -p tools/www/ios/www
-    clearChache
     react-native bundle \
         --platform ios \
+        --reset-cache \
+        --verbose \
         --entry-file index.ios.js \
         --bundle-output ./tools/www/ios/www/index.ios.bundle \
         --assets-dest ./tools/www/ios/www \
-        --berbose
+        --dev false
 }
 
 function genAndroidBundle() {
     mkdir -p tools/www/android/www
-    clearChache
-    cp ${resource}/image/dynamicImages.js ${resource}/image/._____dynamicImage.js
-    vim -e -s \
-        -c "%s#require('\./dynamic/\(.*\))#{uri:'file://'+ROOT+'www/image/\1}#" \
-        -c "%s#module.exports.*#var ROOT = require('react-native').NativeModules.Update.documentFilePath;\r&#" \
-        -c ":wq" \
-        ${resource}/image/dynamicImages.js
-    cp -r ${resource}/image/dynamic tools/www/android/www/image
     react-native bundle \
         --platform android \
+        --reset-cache \
+        --verbose \
         --entry-file index.android.js \
         --bundle-output ./tools/www/android/www/index.android.bundle \
-        --berbose
-    mv ${resource}/image/._____dynamicImage.js ${resource}/image/dynamicImages.js
+        --assets-dest ./tools/www/android/www \
+        --dev false
 }
 
 function zipWWW() {
     node -e "!function(){function i(e,r){var o=n.readdirSync(e);o.forEach(function(o){var s=e+'/'+o;n.statSync(s).isDirectory()?i(s,r+'/'+o):c.folder(r).file(o,n.readFileSync(s))})}function e(e,r,o){r=r||'',o=o||e+'.zip',i(e,r);var s=c.generate({base64:!1,compression:'DEFLATE'});n.writeFile(o,s,'binary',function(){console.log('success')})}var r=require('jszip'),n=require('fs'),c=new r,o=process.argv.splice(1);e.apply(null,o)}();"  www www www.zip
 }
 
-function zipAll() {
+function zipAndroid() {
     cd ./tools/www/android
     zipWWW
-    rm -fr www
-    cd ../ios
-    zipWWW
-    rm -fr www
     cd ../..
-    rm -fr server/public/www
-    mv www server/public/www
+    mv ./www/android/www.zip ../../server/public/download/apks/admin/apks/jsAndroid/jsandroid.zip
+    rm -fr www
+    echo "../../server/public/download/apks/admin/apks/jsAndroid/jsandroid.zip"
 }
-main
+
+function zipIos() {
+    cd ./tools/www/ios
+    zipWWW
+    cd ../..
+    mv ./www/ios/www.zip ../../server/public/download/apks/admin/apks/jsIos/jsios.zip
+    rm -fr www
+    echo "../../server/public/download/apks/admin/apks/jsIos/jsios.zip"
+}
+
+function buildAndroid() {
+    rm -fr www
+    mkdir www
+    cd ..
+    genAndroidBundle
+    zipAndroid
+}
+
+function buildIos() {
+    rm -fr www
+    mkdir www
+    cd ..
+    genIOSBundle
+    zipIos
+}
+
+function main() {
+    if [ "$1" = "android" ];then
+        buildAndroid
+    elif [ "$1" = "ios" ];then
+        buildIos
+    else
+        buildAndroid
+        buildIos
+    fi
+}
+
+main $@
 ```
 * make sure install jszip use npm in global, we use it zip
-* make sure your image resource dir like image/dynamic/\*.png
-* genarate image/dynamicImages.js as below:
-```js
-module.exports = {
-    test:require('./dynamic/test.png'),
-};
-```
+
+### see detail use
+* https://github.com/remobile/react-native-template
+
+#### tools at
+[useful tools](https://github.com/remobile/react-native-template/blob/master/project/tools)
+
+#### example in react-native-template
+[Update](https://github.com/remobile/react-native-template/blob/master/project/App/modules/person/Update.js)
