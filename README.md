@@ -359,6 +359,17 @@ main $@
 ```
 * make sure install jszip use npm in global, we use it zip
 
+### server side version.json
+```json
+{
+    "versionName":"1.0",
+    "versionCode":10,
+    "iosJsVersionCode":0,
+    "androidJsVersionCode":0,
+    "description":"第一版本"
+}
+```
+
 ### see detail use
 * https://github.com/remobile/react-native-template
 
