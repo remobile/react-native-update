@@ -1,6 +1,6 @@
 {
     "name": "@remobile/react-native-update",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Update js version and app version for ios and android",
     "main": "index.js",
     "author": {
