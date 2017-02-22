@@ -6,7 +6,7 @@
 //  Copyright © 2015年 remobile. All rights reserved.
 //
 
-#import "RCTBridgeModule.h"
+#import <React/RCTBridgeModule.h>
 
 @interface RCTUpdate : NSObject <RCTBridgeModule>
 + (NSURL*)getBundleUrl;

@@ -27,8 +27,8 @@
         "url": "git://github.com/remobile/react-native-update.git"
     },
     "peerDependencies": {
-        "@remobile/react-native-zip": "^1.0.3",
+        "@remobile/react-native-zip": "^1.0.4",
         "react-native-fs": "^2.0.1",
-        "@remobile/react-native-file-transfer": "^1.0.6"
+        "@remobile/react-native-file-transfer": "^1.0.7"
     }
 }

@@ -6,7 +6,7 @@
 //  Copyright © 2015年 remobile. All rights reserved.
 //
 
-#import "RCTBridge.h"
+#import <React/RCTBridge.h>
 #import "RCTUpdate.h"
 
 @interface RCTUpdate() {

@@ -150,27 +150,44 @@ class Update {
         }
         this.options.onUnzipJSStart&&this.options.onUnzipJSStart();
         await this.deleteWWWDir();
-        await this.saveLocalJsVersion(this.jsVersionCode);
         Zip.unzip(this.options.jsbundleZipPath, this.options.documentFilePath,async (res)=>{
+            await fs.unlink(this.options.jsbundleZipPath);
             if (res) {
                 await this.saveLocalJsVersion(0); //if unzip error, refresh origin version
                 this.options.onError(ERROR_UNZIP_JS);
             } else {
-                await fs.unlink(this.options.jsbundleZipPath);
+                await this.saveLocalJsVersion(this.jsVersionCode);
+                await app.updateMgr.setNeedShowSplash(true);
                 this.options.onUnzipJSEnd&&this.options.onUnzipJSEnd();
+                app.hasNewVersion = '';
                 RCTUpdate.restartApp();
             }
         }, onprogress);
     }
-    getServerVersion(appStoreVersion) {
+    getServerVersion(appStoreVersion, needUpdate) {
         console.log("getServerVersion", this.options.versionUrl);
-        this.GET(this.options.versionUrl, this.getServerVersionSuccess.bind(this, appStoreVersion), this.getServerVersionError.bind(this));
+        this.GET(this.options.versionUrl, this.getServerVersionSuccess.bind(this, appStoreVersion, needUpdate), this.getServerVersionError.bind(this));
     }
-    getServerVersionSuccess(appStoreVersion, remote) {
+    getServerVersionSuccess(appStoreVersion, needUpdate, remote) {
         console.log("getServerVersionSuccess", remote);
-        if (Platform.OS === 'android' && RCTUpdate.versionCode < remote.versionCode) {
+        if (Platform.OS !== 'android' && needUpdate) {
+            app.hasNewVersion = appStoreVersion+'.0';
             if (this.options.needUpdateApp) {
-                 this.options.needUpdateApp(getVersion(), remote, (res)=>{
+                 this.options.needUpdateApp(getVersion(), {versionName:appStoreVersion, jsVersionCode:0}, remote.iosDescription||remote.description||[], (res)=>{
+                    if (res === 0) {
+                        RCTUpdate.installFromAppStore(trackViewUrl);
+                        setTimeout(()=>{
+                            this.options.onError(ERROR_FAILED_INSTALL);
+                        }, 500);
+                    } else if (res === 1) {
+                        // 跳过此版本
+                    }
+                })
+            }
+        } else if (Platform.OS === 'android' && RCTUpdate.versionCode < remote.versionCode) {
+            app.hasNewVersion = remote.versionName+'.0';
+            if (this.options.needUpdateApp) {
+                 this.options.needUpdateApp(getVersion(), {...remote, jsVersionCode:0}, remote.androidDescription||remote.description||[], (res)=>{
                     if (res === 0) {
                         this.downloadAppFromServer();
                     } else if (res === 1) {
@@ -184,11 +201,17 @@ class Update {
                 this.jsVersionCode = remote.jsVersionCode;
             }
             if (JS_VERISON_CODE < this.jsVersionCode) {
+                app.hasNewVersion = ((Platform.OS !== 'android')?appStoreVersion:remote.versionName)+'.'+this.jsVersionCode;
+            } else {
+                app.hasNewVersion = '';
+            }
+            if (JS_VERISON_CODE < this.jsVersionCode && ((Platform.OS==='android' && remote.androidPassed[CONSTANTS.CHANNEL])||(Platform.OS==='ios' && remote.iosPassed))) {
                 if (this.options.needUpdateJS) {
                     if (Platform.OS !== 'android') {
                         remote.versionName = appStoreVersion;
                     }
-                    this.options.needUpdateJS(getVersion(), {...remote, jsVersionCode:this.jsVersionCode}, (res)=>{
+                    var description = ((Platform.OS==='android')?remote.androidDescription:remote.iosDescription)||remote.description||[];
+                    this.options.needUpdateJS(getVersion(), {...remote, jsVersionCode:this.jsVersionCode}, description, (res)=>{
                         if (res === 0) {
                             this.downloadJSFromServer();
                         } else if (res === 1) {
@@ -221,22 +244,8 @@ class Update {
         var result = data.results[0];
         var version = result.version;
         var trackViewUrl = result.trackViewUrl;
-        if (version !== RCTUpdate.versionName) {
-            if (this.options.needUpdateApp) {
-                 this.options.needUpdateApp(getVersion(), {versionName:version, jsVersionCode:0}, (res)=>{
-                    if (res === 0) {
-                        RCTUpdate.installFromAppStore(trackViewUrl);
-                        setTimeout(()=>{
-                            this.options.onError(ERROR_FAILED_INSTALL);
-                        }, 500);
-                    } else if (res === 1) {
-                        // 跳过此版本
-                    }
-                })
-            }
-        } else {
-            this.getServerVersion(version);
-        }
+        var needUpdate = version!==RCTUpdate.versionName;
+        this.getServerVersion(version, needUpdate);
     }
     getServerVersionError(error) {
         console.log("getServerVersionError", error);
