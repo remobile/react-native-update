@@ -67,7 +67,8 @@ class Update {
         var fileTransfer = new FileTransfer();
         if (this.options.onDownloadAPKProgress) {
             fileTransfer.onprogress = (progress) => {
-                var val = parseInt(progress.loaded*100/progress.total);
+                console.log("downloadApkFromServer", progress.loaded, progress.total, progress);
+                var val = parseInt(progress.loaded*100/(progress.total||0.1));
                 if (oldval !== val) {
                     this.options.onDownloadAPKProgress(val);
                     oldval = val;
@@ -97,7 +98,8 @@ class Update {
         var fileTransfer = new FileTransfer();
         if (this.options.onDownloadJSProgress) {
             fileTransfer.onprogress = (progress) => {
-                var val = parseInt(progress.loaded*100/progress.total);
+                console.log("downloadJSFromServer", progress.loaded, progress.total, progress);
+                var val = parseInt(progress.loaded*100/(progress.total||0.1));
                 if (oldval !== val) {
                     this.options.onDownloadJSProgress(val);
                     oldval = val;
@@ -164,11 +166,11 @@ class Update {
             }
         }, onprogress);
     }
-    getServerVersion(appStoreVersion, needUpdate) {
+    getServerVersion(appStoreVersion, needUpdate, trackViewUrl) {
         console.log("getServerVersion", this.options.versionUrl);
-        this.GET(this.options.versionUrl, this.getServerVersionSuccess.bind(this, appStoreVersion, needUpdate), this.getServerVersionError.bind(this));
+        this.GET(this.options.versionUrl, this.getServerVersionSuccess.bind(this, appStoreVersion, needUpdate, trackViewUrl), this.getServerVersionError.bind(this));
     }
-    getServerVersionSuccess(appStoreVersion, needUpdate, remote) {
+    getServerVersionSuccess(appStoreVersion, needUpdate, trackViewUrl, remote) {
         console.log("getServerVersionSuccess", remote);
         if (Platform.OS !== 'android' && needUpdate) {
             app.hasNewVersion = appStoreVersion+'.0';
@@ -245,7 +247,7 @@ class Update {
         var version = result.version;
         var trackViewUrl = result.trackViewUrl;
         var needUpdate = version!==RCTUpdate.versionName;
-        this.getServerVersion(version, needUpdate);
+        this.getServerVersion(version, needUpdate, trackViewUrl);
     }
     getServerVersionError(error) {
         console.log("getServerVersionError", error);
