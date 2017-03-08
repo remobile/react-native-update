@@ -13,9 +13,8 @@ var
 ERROR_NULL = 0,
 ERROR_DOWNKOAD_APK = 1,
 ERROR_DOWNKOAD_JS = 2,
-ERROR_GET_VERSION = 3,
-ERROR_FAILED_INSTALL = 4,
-ERROR_UNZIP_JS = 5;
+ERROR_FAILED_INSTALL = 3,
+ERROR_UNZIP_JS = 4;
 
 var JS_VERISON_ITEM_NAME = "rct_update_js_version_code";
 var JS_VERISON_CODE = 0;
@@ -29,6 +28,7 @@ RCTUpdate.getLocalValue("JS_VERSION_CLEAR", (val)=>{
     if (val === "yes") {
         JS_VERISON_CODE = 0;
         AsyncStorage.setItem(JS_VERISON_ITEM_NAME, '0');
+        app.updateMgr.setNeedShowSplash(true);
         RCTUpdate.setLocalValue("JS_VERSION_CLEAR", "");
     } else {
         AsyncStorage.getItem(JS_VERISON_ITEM_NAME).then((version)=>{
@@ -37,239 +37,204 @@ RCTUpdate.getLocalValue("JS_VERSION_CLEAR", (val)=>{
     }
 });
 
-class Update {
-    constructor(options) {
-        var documentFilePath = RCTUpdate.documentFilePath;
-        options.documentFilePath = documentFilePath;
-        options.wwwPath = documentFilePath+'www',
-        options.jsbundleZipPath = documentFilePath+'www.zip',
-        options.localVersionPath = documentFilePath+'version.json',
-        this.options = options;
-    }
-    GET(url, success, error) {
-        fetch(url)
-        .then((response) => response.json())
-        .then((json) => {
-            console.log(url, json);
-            success && success(json);
-        })
-        .catch((err) => {
-            error(err);
-        });
-    }
-    downloadAppFromServer() {
-        console.log("downloadAppFromServer");
-        this.downloadApkFromServer();
-    }
-    downloadApkFromServer() {
-        console.log("downloadApkFromServer");
-        var oldval;
-        var fileTransfer = new FileTransfer();
-        if (this.options.onDownloadAPKProgress) {
-            fileTransfer.onprogress = (progress) => {
-                console.log("downloadApkFromServer", progress.loaded, progress.total, progress);
-                var val = parseInt(progress.loaded*100/(progress.total||0.1));
-                if (oldval !== val) {
-                    this.options.onDownloadAPKProgress(val);
-                    oldval = val;
-                }
-            }
-        }
-        this.options.onDownloadAPKStart&&this.options.onDownloadAPKStart();
-        fileTransfer.download(
-            this.options.androidApkUrl,
-            this.options.androidApkDownloadDestPath,
-            (result)=>{
-                this.options.onDownloadAPKEnd&&this.options.onDownloadAPKEnd();
-                RCTUpdate.installApk(this.options.androidApkDownloadDestPath);
-                setTimeout(()=>{
-                    this.options.onError(ERROR_FAILED_INSTALL);
-                }, 500);
-            },
-            (error)=>{
-                this.options.onError(ERROR_DOWNKOAD_APK);
-            },
-            true
-        );
-    }
-    downloadJSFromServer() {
-        console.log("downloadJSFromServer");
-        var oldval;
-        var fileTransfer = new FileTransfer();
-        if (this.options.onDownloadJSProgress) {
-            fileTransfer.onprogress = (progress) => {
-                console.log("downloadJSFromServer", progress.loaded, progress.total, progress);
-                var val = parseInt(progress.loaded*100/(progress.total||0.1));
-                if (oldval !== val) {
-                    this.options.onDownloadJSProgress(val);
-                    oldval = val;
-                }
-            };
-        }
-        this.options.onDownloadJSStart&&this.options.onDownloadJSStart();
-        fileTransfer.download(
-            this.options.jsbundleUrl,
-            this.options.jsbundleZipPath,
-            this.unzipJSZipFile.bind(this),
-            (error)=>{
-                this.options.onError(ERROR_DOWNKOAD_JS);
-            },
-            true
-        );
-    }
-    deleteWWWDir() {
-        return new Promise((resolve, reject) => {
-            fs.unlink(this.options.wwwPath).then(()=>{
-                resolve();
-            }).catch((err)=>{
-                resolve();
-            });
-        });
-    }
-    saveLocalJsVersion(ver) {
-        return new Promise((resolve, reject) => {
-            AsyncStorage.setItem(JS_VERISON_ITEM_NAME, ver+'').then(()=>{
-                JS_VERISON_CODE = ver;
-                resolve();
-            }).catch((err)=>{
-                resolve();
-            });
-        });
-    }
-    async unzipJSZipFile(result) {
-        console.log("unzipJSZipFile", result);
-        var oldval;
-        this.options.onDownloadJSEnd&&this.options.onDownloadJSEnd();
-        var onprogress;
-        if (this.options.onUnzipJSProgress) {
-            onprogress = (progress) => {
-                var val = parseInt(progress.loaded*100/progress.total);
-                if (oldval !== val) {
-                    this.options.onUnzipJSProgress(val);
-                    oldval = val;
-                }
-            };
-        }
-        this.options.onUnzipJSStart&&this.options.onUnzipJSStart();
-        await this.deleteWWWDir();
-        Zip.unzip(this.options.jsbundleZipPath, this.options.documentFilePath,async (res)=>{
-            await fs.unlink(this.options.jsbundleZipPath);
-            if (res) {
-                await this.saveLocalJsVersion(0); //if unzip error, refresh origin version
-                this.options.onError(ERROR_UNZIP_JS);
-            } else {
-                await this.saveLocalJsVersion(this.jsVersionCode);
-                await app.updateMgr.setNeedShowSplash(true);
-                this.options.onUnzipJSEnd&&this.options.onUnzipJSEnd();
-                app.hasNewVersion = '';
-                RCTUpdate.restartApp();
-            }
-        }, onprogress);
-    }
-    getServerVersion(appStoreVersion, needUpdate, trackViewUrl) {
-        console.log("getServerVersion", this.options.versionUrl);
-        this.GET(this.options.versionUrl, this.getServerVersionSuccess.bind(this, appStoreVersion, needUpdate, trackViewUrl), this.getServerVersionError.bind(this));
-    }
-    getServerVersionSuccess(appStoreVersion, needUpdate, trackViewUrl, remote) {
-        console.log("getServerVersionSuccess", remote);
-        if (Platform.OS !== 'android' && needUpdate) {
-            app.hasNewVersion = appStoreVersion+'.0';
-            if (this.options.needUpdateApp) {
-                 this.options.needUpdateApp(getVersion(), {versionName:appStoreVersion, jsVersionCode:0}, remote.iosDescription||remote.description||[], (res)=>{
-                    if (res === 0) {
-                        RCTUpdate.installFromAppStore(trackViewUrl);
-                        setTimeout(()=>{
-                            this.options.onError(ERROR_FAILED_INSTALL);
-                        }, 500);
-                    } else if (res === 1) {
-                        // 跳过此版本
-                    }
-                })
-            }
-        } else if (Platform.OS === 'android' && RCTUpdate.versionCode < remote.versionCode) {
-            app.hasNewVersion = remote.versionName+'.0';
-            if (this.options.needUpdateApp) {
-                 this.options.needUpdateApp(getVersion(), {...remote, jsVersionCode:0}, remote.androidDescription||remote.description||[], (res)=>{
-                    if (res === 0) {
-                        this.downloadAppFromServer();
-                    } else if (res === 1) {
-                        // 跳过此版本
-                    }
-                })
-            }
-        } else {
-            this.jsVersionCode = app.isandroid ? remote.androidJsVersionCode : remote.iosJsVersionCode;
-            if (this.jsVersionCode == null) {
-                this.jsVersionCode = remote.jsVersionCode;
-            }
-            if (JS_VERISON_CODE < this.jsVersionCode) {
-                app.hasNewVersion = ((Platform.OS !== 'android')?appStoreVersion:remote.versionName)+'.'+this.jsVersionCode;
-            } else {
-                app.hasNewVersion = '';
-            }
-            if (JS_VERISON_CODE < this.jsVersionCode && ((Platform.OS==='android' && remote.androidPassed[CONSTANTS.CHANNEL])||(Platform.OS==='ios' && remote.iosPassed))) {
-                if (this.options.needUpdateJS) {
-                    if (Platform.OS !== 'android') {
-                        remote.versionName = appStoreVersion;
-                    }
-                    var description = ((Platform.OS==='android')?remote.androidDescription:remote.iosDescription)||remote.description||[];
-                    this.options.needUpdateJS(getVersion(), {...remote, jsVersionCode:this.jsVersionCode}, description, (res)=>{
-                        if (res === 0) {
-                            this.downloadJSFromServer();
-                        } else if (res === 1) {
-                            // 跳过此版本
-                        }
-                    })
-                } else {
-                    this.downloadJSFromServer();
-                }
-            } else {
-                this.options.onNewestVerion();
-            }
-        }
-    }
-    getAppStoreVersion() {
-        if (!this.options.iosAppId) {
-            console.log("getAppStoreVersion without appID");
-            this.getServerVersion();
-            return;
-        }
-        console.log("getAppStoreVersion with appID:", this.options.iosAppId);
-        this.GET("http://itunes.apple.com/lookup?id="+this.options.iosAppId, this.getAppStoreVersionSuccess.bind(this), this.getServerVersionError.bind(this));
-    }
-    getAppStoreVersionSuccess(data) {
-        console.log("getAppStoreVersionSuccess", data);
-        if (data.resultCount < 1) {
-            this.getServerVersionError();
-            return;
-        }
-        var result = data.results[0];
-        var version = result.version;
-        var trackViewUrl = result.trackViewUrl;
-        var needUpdate = version!==RCTUpdate.versionName;
-        this.getServerVersion(version, needUpdate, trackViewUrl);
-    }
-    getServerVersionError(error) {
-        console.log("getServerVersionError", error);
-        this.options.onError(ERROR_GET_VERSION);
-    }
-    start() {
-        if (Platform.OS === 'android') {
-            this.getServerVersion();
-        } else {
-            this.getAppStoreVersion();
-        }
+const IS_ANDROID = Platform.OS === 'android';
+const DOCUMENT_FILE_PATH = RCTUpdate.documentFilePath;
+const WWW_PATH = DOCUMENT_FILE_PATH+'www';
+const JS_BUNDLE_ZIP_PATH = DOCUMENT_FILE_PATH+'www.zip';
+
+function updateApp(options) {
+    console.log("updateApp");
+    if (IS_ANDROID) {
+        downloadApkFromServer(options);
+    } else {
+        RCTUpdate.installFromAppStore(options.trackViewUrl);
     }
 }
+function downloadApkFromServer(options) {
+    console.log("downloadApkFromServer", options);
+    let oldval;
+    const fileTransfer = new FileTransfer();
+    const {androidApkUrl, androidApkDownloadDestPath, onDownloadAPKProgress, onDownloadAPKStart, onDownloadAPKEnd, onError} = options;
+    if (onDownloadAPKProgress) {
+        fileTransfer.onprogress = (progress) => {
+            console.log("downloadApkFromServer", progress.loaded, progress.total, progress);
+            var val = parseInt(progress.loaded*100/(progress.total||0.1));
+            if (oldval !== val) {
+                onDownloadAPKProgress(val);
+                oldval = val;
+            }
+        }
+    }
+    onDownloadAPKStart && onDownloadAPKStart();
+    fileTransfer.download(
+        androidApkUrl,
+        androidApkDownloadDestPath,
+        (result)=>{
+            onDownloadAPKEnd && onDownloadAPKEnd();
+            RCTUpdate.installApk(androidApkDownloadDestPath);
+            setTimeout(()=>{
+                onError && onError(ERROR_FAILED_INSTALL);
+            }, 500);
+        },
+        (error)=>{
+            onError && onError(ERROR_DOWNKOAD_APK);
+        },
+        true
+    );
+}
+function updateJS(options) {
+    console.log("updateJS");
+    let oldval;
+    const fileTransfer = new FileTransfer();
+    const {jsbundleUrl, onDownloadJSProgress, onDownloadJSStart, onDownloadJSEnd, onError} = options;
 
-function getVersion() {
-    return {
-        versionName: RCTUpdate.versionName,
-        versionCode: RCTUpdate.versionCode,
-        jsVersionCode: JS_VERISON_CODE,
+    if (onDownloadJSProgress) {
+        fileTransfer.onprogress = (progress) => {
+            console.log("downloadJSFromServer", progress.loaded, progress.total, progress);
+            var val = parseInt(progress.loaded*100/(progress.total||0.1));
+            if (oldval !== val) {
+                onDownloadJSProgress && onDownloadJSProgress(val);
+                oldval = val;
+            }
+        };
+    }
+    onDownloadJSStart && onDownloadJSStart();
+    fileTransfer.download(
+        jsbundleUrl,
+        JS_BUNDLE_ZIP_PATH,
+        (result)=>{
+            onDownloadJSEnd && onDownloadJSEnd();
+            unzipJSZipFile(options);
+        },
+        (error)=>{
+            onError && onError(ERROR_DOWNKOAD_JS);
+        },
+        true
+    );
+}
+function saveLocalJsVersion(ver) {
+    return new Promise((resolve, reject) => {
+        AsyncStorage.setItem(JS_VERISON_ITEM_NAME, ver+'').then(()=>{
+            JS_VERISON_CODE = ver;
+            resolve();
+        }).catch((err)=>{
+            resolve();
+        });
+    });
+}
+function deleteDir(path) {
+    return new Promise((resolve, reject) => {
+        fs.unlink(path).then(()=>{
+            resolve();
+        }).catch((err)=>{
+            resolve();
+        });
+    });
+}
+async function unzipJSZipFile(options) {
+    console.log("unzipJSZipFile", options);
+    let oldval;
+    const {jsbundleUrl, jsVersionCode,onUnzipJSProgress, onUnzipJSStart, onUnzipJSEnd, onError} = options;
+    var onprogress;
+    if (onUnzipJSProgress) {
+        onprogress = (progress) => {
+            var val = parseInt(progress.loaded*100/progress.total);
+            if (oldval !== val) {
+                onUnzipJSProgress(val);
+                oldval = val;
+            }
+        };
+    }
+    onUnzipJSStart && onUnzipJSStart();
+    await deleteDir(WWW_PATH);
+    Zip.unzip(JS_BUNDLE_ZIP_PATH, DOCUMENT_FILE_PATH, async (res)=>{
+        await deleteDir(JS_BUNDLE_ZIP_PATH);
+        if (res) {
+            await saveLocalJsVersion(0); //if unzip error, refresh origin version
+            onError && onError(ERROR_UNZIP_JS);
+        } else {
+            await saveLocalJsVersion(jsVersionCode);
+            await app.updateMgr.setNeedShowSplash(true);
+            onUnzipJSEnd && onUnzipJSEnd();
+            RCTUpdate.restartApp();
+        }
+    }, onprogress);
+}
+function GET(url, success, error) {
+    fetch(url)
+    .then((response) => response.json())
+    .then((json) => {
+        console.log(url, json);
+        success && success(json);
+    })
+    .catch((err) => {
+        error(err);
+    });
+}
+function getServerVersion(options) {
+    const {versionUrl} = options;
+    console.log("getServerVersion", versionUrl);
+    GET(versionUrl, getServerVersionSuccess.bind(null, options), getServerVersionError.bind(null, options));
+}
+function getServerVersionSuccess(options, remote) {
+    console.log("getServerVersionSuccess", options, remote);
+    const {iosVersion, resolve, versionName, currentVersion, versionCode, trackViewUrl} = options;
+    const jsVersionCode = IS_ANDROID ? remote.androidJsVersionCode : remote.iosJsVersionCode;
+    const description = IS_ANDROID ? remote.androidDescription : remote.iosDescription;
+    if (!IS_ANDROID && versionName !== iosVersion) {
+        resolve({currentVersion, description, newVersion: iosVersion+'.0', trackViewUrl});
+    } else if (IS_ANDROID && versionName !== remote.versionName) {
+        resolve({currentVersion, description, newVersion: remote.versionName+'.0'});
+    } else if (JS_VERISON_CODE < jsVersionCode) {
+        resolve({currentVersion, description, newVersion: versionName+'.'+jsVersionCode, jsVersionCode});
+    } else {
+        resolve({currentVersion});
     }
 }
+function getAppStoreVersion(options) {
+    const {iosAppId} = options;
+    if (!iosAppId) {
+        console.log("getAppStoreVersion without appID");
+        getServerVersion(options);
+        return;
+    }
+    console.log("getAppStoreVersion with appID:", iosAppId);
+    GET("http://itunes.apple.com/lookup?id="+iosAppId, getAppStoreVersionSuccess.bind(null, options), getServerVersionError.bind(null, options));
+}
+function getAppStoreVersionSuccess(options, data) {
+    console.log("getAppStoreVersionSuccess", data);
+    if (data.resultCount < 1) {
+        getServerVersionError(options);
+        return;
+    }
+    var result = data.results[0];
+    options.iosVersion = result.version;
+    options.trackViewUrl = result.trackViewUrl;
+    getServerVersion(options);
+}
+function getServerVersionError(options, error) {
+    console.log("getServerVersionError", error);
+    options.resolve();
+}
+function checkVersion(options) {
+    return new Promise((resolve)=>{
+        Object.assign(options, {
+            resolve,
+            versionName: RCTUpdate.versionName,
+            currentVersion: RCTUpdate.versionName + '.' + JS_VERISON_CODE,
+            versionCode: RCTUpdate.versionCode,
+        });
+        if (IS_ANDROID) {
+            getServerVersion(options);
+        } else {
+            getAppStoreVersion(options);
+        }
+    });
+}
 
-Update.getVersion = getVersion;
-
-module.exports = Update;
+module.exports = {
+    getVersion: ()=>RCTUpdate.versionName + '.' + JS_VERISON_CODE,
+    checkVersion,
+    updateApp,
+    updateJS,
+};

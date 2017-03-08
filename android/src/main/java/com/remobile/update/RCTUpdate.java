@@ -49,10 +49,17 @@ public class RCTUpdate extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void installApk(final String file) throws Exception {
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setAction(android.content.Intent.ACTION_VIEW);
-        intent.setDataAndType(Uri.fromFile(new File(file)), "application/vnd.android.package-archive");
-        this.activity.startActivity(intent);
+        final Activity activity = this.activity;
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(Uri.fromFile(new File(file)), "application/vnd.android.package-archive");
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(intent);
+                android.os.Process.killProcess(android.os.Process.myPid()); 
+            }
+        });
     }
 
     @ReactMethod
