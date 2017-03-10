@@ -40,6 +40,7 @@ RCTUpdate.getLocalValue("JS_VERSION_CLEAR", (val)=>{
 const IS_ANDROID = Platform.OS === 'android';
 const DOCUMENT_FILE_PATH = RCTUpdate.documentFilePath;
 const WWW_PATH = DOCUMENT_FILE_PATH+'www';
+const CACHE_PATH = DOCUMENT_FILE_PATH+'_www';
 const JS_BUNDLE_ZIP_PATH = DOCUMENT_FILE_PATH+'www.zip';
 
 function updateApp(options) {
@@ -146,13 +147,26 @@ async function unzipJSZipFile(options) {
         };
     }
     onUnzipJSStart && onUnzipJSStart();
-    await deleteDir(WWW_PATH);
     Zip.unzip(JS_BUNDLE_ZIP_PATH, DOCUMENT_FILE_PATH, async (res)=>{
         await deleteDir(JS_BUNDLE_ZIP_PATH);
         if (res) {
-            await saveLocalJsVersion(0); //if unzip error, refresh origin version
             onError && onError(ERROR_UNZIP_JS);
         } else {
+            try {
+                let needCopyFiles = JSON.parse(await fs.readFile(CACHE_PATH+'/needCopyFiles.json'));
+                for (let file of needCopyFiles) {
+                    await fs.mkdir(CACHE_PATH+'/'+file.replace(/[^/]*$/, ''));
+                    await fs.copyFile(WWW_PATH+'/'+file, CACHE_PATH+'/'+file);
+                }
+            } catch(e) {
+                console.log('unzip erorr:', e);
+                await deleteDir(CACHE_PATH);
+                onError && onError(ERROR_UNZIP_JS);
+                return;
+            }
+            await deleteDir(WWW_PATH);
+            await fs.unlink(CACHE_PATH+'/needCopyFiles.json');
+            await fs.moveFile(CACHE_PATH, WWW_PATH);
             await saveLocalJsVersion(jsVersionCode);
             await app.updateMgr.setNeedShowSplash(true);
             onUnzipJSEnd && onUnzipJSEnd();

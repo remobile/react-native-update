@@ -710,50 +710,46 @@ doUpdate() {
 ```bash
 #!/bin/bash
 
+distpath=../../localServer/public/download
+
 function genIOSBundle() {
-    mkdir -p tools/www/ios/www
     react-native bundle \
         --platform ios \
         --reset-cache \
         --verbose \
         --entry-file index.ios.js \
-        --bundle-output ./tools/www/ios/www/index.ios.bundle \
-        --assets-dest ./tools/www/ios/www \
+        --bundle-output ./tools/www/index.ios.bundle \
+        --assets-dest ./tools/www/ \
         --dev false
 }
 
 function genAndroidBundle() {
-    mkdir -p tools/www/android/www
     react-native bundle \
         --platform android \
         --reset-cache \
         --verbose \
         --entry-file index.android.js \
-        --bundle-output ./tools/www/android/www/index.android.bundle \
-        --assets-dest ./tools/www/android/www \
+        --bundle-output ./tools/www/index.android.bundle \
+        --assets-dest ./tools/www/ \
         --dev false
 }
 
 function zipWWW() {
-    node -e "!function(){function i(e,r){var o=n.readdirSync(e);o.forEach(function(o){var s=e+'/'+o;n.statSync(s).isDirectory()?i(s,r+'/'+o):c.folder(r).file(o,n.readFileSync(s))})}function e(e,r,o){r=r||'',o=o||e+'.zip',i(e,r);var s=c.generate({base64:!1,compression:'DEFLATE'});n.writeFile(o,s,'binary',function(){console.log('success')})}var r=require('jszip'),n=require('fs'),c=new r,o=process.argv.splice(1);e.apply(null,o)}();"  www www www.zip
+    node -e "!function(){function i(e,r){var o=n.readdirSync(e);o.forEach(function(o){var s=e+'/'+o;n.statSync(s).isDirectory()?i(s,r+'/'+o):c.folder(r).file(o,n.readFileSync(s))})}function e(e,r,o){r=r||'',o=o||e+'.zip',i(e,r);var s=c.generate({base64:!1,compression:'DEFLATE'});n.writeFile(o,s,'binary',function(){console.log('success')})}var r=require('jszip'),n=require('fs'),c=new r,o=process.argv.splice(1);e.apply(null,o)}();"  www _www www.zip
 }
 
-function zipAndroid() {
-    cd ./tools/www/android
-    zipWWW
-    cd ../..
-    mv ./www/android/www.zip ../../server/public/download/apks/admin/apks/jsAndroid/jsandroid.zip
-    rm -fr www
-    echo "../../server/public/download/apks/admin/apks/jsAndroid/jsandroid.zip"
+function genMd5List() {
+    cd ./tools
+    # git co head ${distpath}/${1}_md5.json
+    node -e "var o=process.argv;require('./getMd5List')(o[1],o[2])" ${1} ${distpath}
 }
 
-function zipIos() {
-    cd ./tools/www/ios
+function zipFile() {
     zipWWW
-    cd ../..
-    mv ./www/ios/www.zip ../../server/public/download/apks/admin/apks/jsIos/jsios.zip
+    mv ./www.zip ${distpath}/js${1}.zip
     rm -fr www
-    echo "../../server/public/download/apks/admin/apks/jsIos/jsios.zip"
+    mv ./${1}_md5.json ${distpath}/${1}_md5.json
+    echo "${distpath}"
 }
 
 function buildAndroid() {
@@ -761,7 +757,8 @@ function buildAndroid() {
     mkdir www
     cd ..
     genAndroidBundle
-    zipAndroid
+    genMd5List android
+    zipFile android
 }
 
 function buildIos() {
@@ -769,7 +766,8 @@ function buildIos() {
     mkdir www
     cd ..
     genIOSBundle
-    zipIos
+    genMd5List ios
+    zipFile ios
 }
 
 function main() {
@@ -777,9 +775,11 @@ function main() {
         buildAndroid
     elif [ "$1" = "ios" ];then
         buildIos
-    else
+    elif [ "$1" = "all" ];then
         buildAndroid
         buildIos
+    else
+        echo "Usage: ./genbundle ios|android|all"
     fi
 }
 
