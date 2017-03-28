@@ -32,7 +32,7 @@ RCTUpdate.getLocalValue("JS_VERSION_CLEAR", (val)=>{
         RCTUpdate.setLocalValue("JS_VERSION_CLEAR", "");
     } else {
         AsyncStorage.getItem(JS_VERISON_ITEM_NAME).then((version)=>{
-            JS_VERISON_CODE = version||0;
+            JS_VERISON_CODE = (version||0)*1;
         });
     }
 });
@@ -87,7 +87,8 @@ function updateJS(options) {
     console.log("updateJS");
     let oldval;
     const fileTransfer = new FileTransfer();
-    const {jsbundleUrl, onDownloadJSProgress, onDownloadJSStart, onDownloadJSEnd, onError} = options;
+    const {jsbundleUrl, jsVersionCode, onDownloadJSProgress, onDownloadJSStart, onDownloadJSEnd, onError} = options;
+    const newJsbundleUrl = (JS_VERISON_CODE < jsVersionCode-1) ? jsbundleUrl.replace(/\.zip/, '_all.zip'): jsbundleUrl;
 
     if (onDownloadJSProgress) {
         fileTransfer.onprogress = (progress) => {
@@ -101,7 +102,7 @@ function updateJS(options) {
     }
     onDownloadJSStart && onDownloadJSStart();
     fileTransfer.download(
-        jsbundleUrl,
+        newJsbundleUrl,
         JS_BUNDLE_ZIP_PATH,
         (result)=>{
             onDownloadJSEnd && onDownloadJSEnd();
@@ -135,7 +136,7 @@ function deleteDir(path) {
 async function unzipJSZipFile(options) {
     console.log("unzipJSZipFile", options);
     let oldval;
-    const {jsbundleUrl, jsVersionCode,onUnzipJSProgress, onUnzipJSStart, onUnzipJSEnd, onError} = options;
+    const {jsVersionCode, onUnzipJSProgress, onUnzipJSStart, onUnzipJSEnd, onError} = options;
     var onprogress;
     if (onUnzipJSProgress) {
         onprogress = (progress) => {
@@ -154,9 +155,20 @@ async function unzipJSZipFile(options) {
         } else {
             try {
                 let needCopyFiles = JSON.parse(await fs.readFile(CACHE_PATH+'/needCopyFiles.json'));
-                for (let file of needCopyFiles) {
-                    await fs.mkdir(CACHE_PATH+'/'+file.replace(/[^/]*$/, ''));
-                    await fs.copyFile(WWW_PATH+'/'+file, CACHE_PATH+'/'+file);
+                if (JS_VERISON_CODE === 0) {
+                    for (let file of needCopyFiles) {
+                        await fs.mkdir(CACHE_PATH+'/'+file.replace(/[^/]*$/, ''));
+                        if (IS_ANDROID) {
+                            await fs.copyFileRes(file.replace(/.*\/(.*)/, '$1'), CACHE_PATH+'/'+file);
+                        } else {
+                            await fs.copyFile(fs.MainBundlePath+'/'+file, CACHE_PATH+'/'+file);
+                        }
+                    }
+                } else {
+                    for (let file of needCopyFiles) {
+                        await fs.mkdir(CACHE_PATH+'/'+file.replace(/[^/]*$/, ''));
+                        await fs.copyFile(WWW_PATH+'/'+file, CACHE_PATH+'/'+file);
+                    }
                 }
             } catch(e) {
                 console.log('unzip erorr:', e);
@@ -196,9 +208,17 @@ function getServerVersionSuccess(options, remote) {
     const jsVersionCode = IS_ANDROID ? remote.androidJsVersionCode : remote.iosJsVersionCode;
     const description = IS_ANDROID ? remote.androidDescription : remote.iosDescription;
     if (!IS_ANDROID && versionName !== iosVersion) {
-        resolve({currentVersion, description, newVersion: iosVersion+'.0', trackViewUrl});
+        if (versionName < iosVersion) {
+            resolve({currentVersion, description, newVersion: iosVersion+'.0', trackViewUrl});
+        } else {
+            resolve({currentVersion});
+        }
     } else if (IS_ANDROID && versionName !== remote.versionName) {
-        resolve({currentVersion, description, newVersion: remote.versionName+'.0'});
+        if (versionName < remote.versionName) {
+            resolve({currentVersion, description, newVersion: remote.versionName+'.0'});
+        } else {
+            resolve({currentVersion});
+        }
     } else if (JS_VERISON_CODE < jsVersionCode) {
         resolve({currentVersion, description, newVersion: versionName+'.'+jsVersionCode, jsVersionCode});
     } else {
