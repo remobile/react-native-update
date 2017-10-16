@@ -8,10 +8,12 @@ import android.os.Looper;
 
 import com.facebook.react.ReactActivity;
 import com.facebook.react.ReactInstanceManager;
+import com.facebook.react.ReactApplication;
 import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.JSBundleLoader;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -23,8 +25,6 @@ import java.util.Map;
 public class RCTUpdate extends ReactContextBaseJavaModule {
     private Activity activity;
     private RCTUpdateMgr updateMgr;
-    private static final String REACT_APPLICATION_CLASS_NAME = "com.facebook.react.ReactApplication";
-    private static final String REACT_NATIVE_HOST_CLASS_NAME = "com.facebook.react.ReactNativeHost";
 
     public RCTUpdate(ReactApplicationContext reactContext, Activity activity, RCTUpdateMgr updateMgr) {
         super(reactContext);
@@ -57,7 +57,7 @@ public class RCTUpdate extends ReactContextBaseJavaModule {
                 intent.setDataAndType(Uri.fromFile(new File(file)), "application/vnd.android.package-archive");
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 activity.startActivity(intent);
-                android.os.Process.killProcess(android.os.Process.myPid()); 
+                android.os.Process.killProcess(android.os.Process.myPid());
             }
         });
     }
@@ -78,86 +78,68 @@ public class RCTUpdate extends ReactContextBaseJavaModule {
         updateMgr.setLocalValue(tag, value);
     }
 
+    private void loadBundleLegacy() {
+        final Activity currentActivity = getCurrentActivity();
+        if (currentActivity == null) {
+            return;
+        }
+        currentActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                currentActivity.recreate();
+            }
+        });
+    }
+
+    private ReactInstanceManager resolveInstanceManager() throws NoSuchFieldException, IllegalAccessException {
+        ReactInstanceManager instanceManager;
+        final Activity currentActivity = getCurrentActivity();
+        if (currentActivity == null) {
+            return null;
+        }
+
+        ReactApplication reactApplication = (ReactApplication) currentActivity.getApplication();
+        instanceManager = reactApplication.getReactNativeHost().getReactInstanceManager();
+
+        return instanceManager;
+    }
+
     private void loadBundle() {
         try {
             final ReactInstanceManager instanceManager = resolveInstanceManager();
             if (instanceManager == null) {
                 return;
             }
-
             setJSBundle(instanceManager, updateMgr.getBundleUrl());
-
-            final Method recreateMethod = instanceManager.getClass().getMethod("recreateReactContextInBackground");
             new Handler(Looper.getMainLooper()).post(new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        recreateMethod.invoke(instanceManager);
+                        instanceManager.recreateReactContextInBackground();
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        loadBundleLegacy();
                     }
                 }
             });
-
         } catch (Exception e) {
-            e.printStackTrace();
+            loadBundleLegacy();
         }
     }
 
-    private ReactInstanceManager resolveInstanceManager() throws Exception {
-        Method getApplicationMethod = ReactActivity.class.getMethod("getApplication");
-        Object reactApplication = getApplicationMethod.invoke(activity);
-        Class<?> reactApplicationClass = tryGetClass(REACT_APPLICATION_CLASS_NAME);
-        Method getReactNativeHostMethod = reactApplicationClass.getMethod("getReactNativeHost");
-        Object reactNativeHost = getReactNativeHostMethod.invoke(reactApplication);
-        Class<?> reactNativeHostClass = tryGetClass(REACT_NATIVE_HOST_CLASS_NAME);
-        Method getReactInstanceManagerMethod = reactNativeHostClass.getMethod("getReactInstanceManager");
-        return (ReactInstanceManager)getReactInstanceManagerMethod.invoke(reactNativeHost);
-    }
+    private void setJSBundle(ReactInstanceManager instanceManager, String latestJSBundleFile) throws IllegalAccessException {
+       try {
+           JSBundleLoader latestJSBundleLoader;
+           if (latestJSBundleFile.toLowerCase().startsWith("assets://")) {
+               latestJSBundleLoader = JSBundleLoader.createAssetLoader(getReactApplicationContext(), latestJSBundleFile, false);
+           } else {
+               latestJSBundleLoader = JSBundleLoader.createFileLoader(latestJSBundleFile);
+           }
 
-    private void setJSBundle(ReactInstanceManager instanceManager, String latestJSBundleFile) throws NoSuchFieldException, IllegalAccessException {
-        try {
-            Field bundleLoaderField = instanceManager.getClass().getDeclaredField("mBundleLoader");
-            Class<?> jsBundleLoaderClass = Class.forName("com.facebook.react.cxxbridge.JSBundleLoader");
-            Method createFileLoaderMethod = null;
-
-            Method[] methods = jsBundleLoaderClass.getDeclaredMethods();
-            for (Method method : methods) {
-                if (method.getName().equals("createFileLoader")) {
-                    createFileLoaderMethod = method;
-                    break;
-                }
-            }
-
-            if (createFileLoaderMethod == null) {
-                throw new NoSuchMethodException("Could not find a recognized 'createFileLoader' method");
-            }
-            int numParameters = createFileLoaderMethod.getGenericParameterTypes().length;
-            Object latestJSBundleLoader;
-            if (numParameters == 1) {
-                // RN >= v0.34
-                latestJSBundleLoader = createFileLoaderMethod.invoke(jsBundleLoaderClass, latestJSBundleFile);
-            } else if (numParameters == 2) {
-                // RN >= v0.31 && RN < v0.34
-                latestJSBundleLoader = createFileLoaderMethod.invoke(jsBundleLoaderClass, getReactApplicationContext(), latestJSBundleFile);
-            } else {
-                throw new NoSuchMethodException("Could not find a recognized 'createFileLoader' method");
-            }
-
-            bundleLoaderField.setAccessible(true);
-            bundleLoaderField.set(instanceManager, latestJSBundleLoader);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-
-    private Class tryGetClass(String className) {
-        try {
-            return Class.forName(className);
-        } catch (ClassNotFoundException e) {
-            return null;
-        }
-    }
-
+           Field bundleLoaderField = instanceManager.getClass().getDeclaredField("mBundleLoader");
+           bundleLoaderField.setAccessible(true);
+           bundleLoaderField.set(instanceManager, latestJSBundleLoader);
+       } catch (Exception e) {
+           throw new IllegalAccessException("Could not setJSBundle");
+       }
+   }
 }
