@@ -27,23 +27,28 @@ RCT_EXPORT_MODULE()
     NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
     NSString *lastversionCode = [userDefaults objectForKey:@"APP_VERSION_CODE"];
     NSString *versionCode = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+    NSURL *bundle = nil;
     if (![lastversionCode isEqualToString:versionCode]) {
         [userDefaults setObject:versionCode forKey:@"APP_VERSION_CODE"];
         [userDefaults setObject:@"yes" forKey:@"JS_VERSION_CLEAR"];
         [userDefaults synchronize];
         NSFileManager *fileManager = [NSFileManager defaultManager];
         [fileManager removeItemAtPath:[[RCTUpdate DocumentFilePath] stringByAppendingString:@"www"] error:nil];
-        NSLog(@"=========use update asserts:");
-        return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+        bundle = [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+        NSLog(@"=========use update asserts:%@", bundle);
+        return bundle;
     }
     
     NSString *mainBundleFilePath = [RCTUpdate MainBundleFilePath];
     if ([[NSFileManager defaultManager] fileExistsAtPath:mainBundleFilePath]) {
-         NSLog(@"=========use update:");
-        return [NSURL fileURLWithPath:mainBundleFilePath];
+        bundle = [NSURL fileURLWithPath:mainBundleFilePath];
+        NSLog(@"=========use update:%@", bundle);
+        return bundle;
     }
-     NSLog(@"=========use asserts:");
-    return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+    bundle = [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+
+     NSLog(@"=========use asserts:%@", bundle);
+    return bundle;
 }
 
 + (NSString *)DocumentFilePath {
