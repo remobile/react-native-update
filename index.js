@@ -206,7 +206,7 @@ function getServerVersionSuccess (options, remote) {
     const { iosVersion, resolve, versionName, currentVersion, versionCode, trackViewUrl } = options;
     const jsVersionCode = IS_ANDROID ? remote.androidJsVersionCode : remote.iosJsVersionCode;
     const description = IS_ANDROID ? remote.androidDescription : remote.iosDescription;
-    if (!IS_ANDROID && versionName !== iosVersion) {
+    if (!IS_ANDROID && versionName !== iosVersion && iosVersion) {
         if (versionName < iosVersion) {
             resolve({ currentVersion, description, newVersion: iosVersion + '.0', trackViewUrl });
         } else {
@@ -253,7 +253,7 @@ function checkVersion (options) {
     return new Promise((resolve) => {
         Object.assign(options, {
             resolve,
-            versionName: RCTUpdate.versionName,
+            versionName: RCTUpdate.versionName + '.' + RCTUpdate.versionCode,
             currentVersion: RCTUpdate.versionName + '.' + JS_VERISON_CODE,
             versionCode: RCTUpdate.versionCode,
         });
