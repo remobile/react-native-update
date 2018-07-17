@@ -241,7 +241,7 @@ function getAppStoreVersionSuccess (options, data) {
         return;
     }
     const result = data.results[0];
-    options.iosVersion = result.version;
+    options.iosVersion = result.version.replace(/(\d+\.\d+).*/, '$1'); //适配性规则
     options.trackViewUrl = result.trackViewUrl;
     getServerVersion(options);
 }
@@ -253,7 +253,7 @@ function checkVersion (options) {
     return new Promise((resolve) => {
         Object.assign(options, {
             resolve,
-            versionName: RCTUpdate.versionName + '.' + RCTUpdate.versionCode,
+            versionName: RCTUpdate.versionName,
             currentVersion: RCTUpdate.versionName + '.' + JS_VERISON_CODE,
             versionCode: RCTUpdate.versionCode,
         });
