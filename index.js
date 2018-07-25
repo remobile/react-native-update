@@ -203,18 +203,18 @@ function getServerVersion (options) {
 }
 function getServerVersionSuccess (options, remote) {
     console.log('getServerVersionSuccess', options, remote);
-    const { iosVersion, resolve, versionName, currentVersion, versionCode, trackViewUrl } = options;
+    const { iosAppstoreVersion, resolve, versionName, currentVersion, versionCode, trackViewUrl } = options;
     const jsVersionCode = IS_ANDROID ? remote.androidJsVersionCode : remote.iosJsVersionCode;
     const description = IS_ANDROID ? remote.androidDescription : remote.iosDescription;
-    if (!IS_ANDROID && versionName !== iosVersion && iosVersion) {
-        if (versionName < iosVersion) {
-            resolve({ currentVersion, description, newVersion: iosVersion + '.0', trackViewUrl });
+    if (!IS_ANDROID && versionName !== remote.iosVersion && iosAppstoreVersion) {
+        if (versionName < iosAppstoreVersion) {
+            resolve({ currentVersion, description, newVersion: iosAppstoreVersion + '.0', trackViewUrl });
         } else {
             resolve({ currentVersion });
         }
-    } else if (IS_ANDROID && versionName !== remote.versionName) {
-        if (versionName < remote.versionName) {
-            resolve({ currentVersion, description, newVersion: remote.versionName + '.0' });
+    } else if (IS_ANDROID && versionName !== remote.androidVersion) {
+        if (versionName < remote.androidVersion) {
+            resolve({ currentVersion, description, newVersion: remote.androidVersion + '.0' });
         } else {
             resolve({ currentVersion });
         }
@@ -241,7 +241,7 @@ function getAppStoreVersionSuccess (options, data) {
         return;
     }
     const result = data.results[0];
-    options.iosVersion = result.version.replace(/(\d+\.\d+).*/, '$1'); //适配性规则
+    options.iosAppstoreVersion = result.version.replace(/(\d+\.\d+).*/, '$1'); //适配性规则
     options.trackViewUrl = result.trackViewUrl;
     getServerVersion(options);
 }
