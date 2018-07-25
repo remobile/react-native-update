@@ -203,26 +203,29 @@ function getServerVersion (options) {
 }
 function getServerVersionSuccess (options, remote) {
     console.log('getServerVersionSuccess', options, remote);
-    const { iosAppstoreVersion, resolve, versionName, currentVersion, versionCode, trackViewUrl } = options;
+    const { resolve, versionName, currentVersion, versionCode, trackViewUrl } = options;
     const jsVersionCode = IS_ANDROID ? remote.androidJsVersionCode : remote.iosJsVersionCode;
     const description = IS_ANDROID ? remote.androidDescription : remote.iosDescription;
-    if (!IS_ANDROID && versionName !== remote.iosVersion && iosAppstoreVersion) {
-        if (versionName < iosAppstoreVersion) {
-            resolve({ currentVersion, description, newVersion: iosAppstoreVersion + '.0', trackViewUrl });
-        } else {
-            resolve({ currentVersion });
+    if (!IS_ANDROID) { // ios
+        if (versionName < remote.iosVersion) { //只有小于的时候，才提示更新大版本
+            if (trackViewUrl) {
+                return resolve({ currentVersion, description, newVersion: remote.iosVersion + '.0', trackViewUrl });
+            }
+        } else if (versionName === remote.iosVersion) { // 只有大版本相同的时候，才检测小版本
+            if (JS_VERISON_CODE < jsVersionCode) {
+                return resolve({ currentVersion, description, newVersion: versionName + '.' + jsVersionCode, jsVersionCode });
+            }
         }
-    } else if (IS_ANDROID && versionName !== remote.androidVersion) {
-        if (versionName < remote.androidVersion) {
-            resolve({ currentVersion, description, newVersion: remote.androidVersion + '.0' });
-        } else {
-            resolve({ currentVersion });
+    } else { // android
+        if (versionName < remote.androidVersion) { //只有小于的时候，才提示更新大版本
+            return resolve({ currentVersion, description, newVersion: remote.androidVersion + '.0' });
+        } else if (versionName === remote.androidVersion) { // 只有大版本相同的时候，才检测小版本
+            if (JS_VERISON_CODE < jsVersionCode) {
+                return resolve({ currentVersion, description, newVersion: versionName + '.' + jsVersionCode, jsVersionCode });
+            }
         }
-    } else if (JS_VERISON_CODE < jsVersionCode) {
-        resolve({ currentVersion, description, newVersion: versionName + '.' + jsVersionCode, jsVersionCode });
-    } else {
-        resolve({ currentVersion });
     }
+    resolve({ currentVersion });
 }
 function getAppStoreVersion (options) {
     const { iosAppId } = options;
@@ -241,7 +244,6 @@ function getAppStoreVersionSuccess (options, data) {
         return;
     }
     const result = data.results[0];
-    options.iosAppstoreVersion = result.version.replace(/(\d+\.\d+).*/, '$1'); //适配性规则
     options.trackViewUrl = result.trackViewUrl;
     getServerVersion(options);
 }
