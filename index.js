@@ -220,7 +220,7 @@ function getServerVersionSuccess (options, remote) {
         if (versionName < remote.androidVersion) { //只有小于的时候，才提示更新大版本
             return resolve({ currentVersion, description, newVersion: remote.androidVersion + '.0' });
         } else if (versionName === remote.androidVersion) { // 只有大版本相同的时候，才检测小版本
-            if (JS_VERISON_CODE < jsVersionCode && remote[CONSTANTS.CHANNEL])) {
+            if (JS_VERISON_CODE < jsVersionCode && !remote[CONSTANTS.CHANNEL]) {
                 return resolve({ currentVersion, description, newVersion: versionName + '.' + jsVersionCode, jsVersionCode });
             }
         }
